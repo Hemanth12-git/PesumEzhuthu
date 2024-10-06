@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Transcription from './Transcription';
 import Translation from './Translation';
 
@@ -8,46 +8,6 @@ export default function Information(props) {
     const [translation, setTranslation] = useState(null);
     const [toLanguage, setToLanguage] = useState('Select language');
     const [translating, setTranslating] = useState(false);
-    const worker = useRef(null);
-
-    useEffect(() => {
-        if (!worker.current) {
-            worker.current = new Worker(new URL('../utils/translate.worker.js', import.meta.url), {
-                type: 'module'
-            });
-        }
-
-        const onMessageReceived = (e) => {
-            switch (e.data.status) {
-                case 'initiate':
-                    console.log('DOWNLOADING');
-                    break;
-                case 'progress':
-                    console.log('LOADING');
-                    break;
-                case 'update':
-                    setTranslation(e.data.output);
-                    console.log(e.data.output);
-                    break;
-                case 'complete':
-                    setTranslating(false);
-                    console.log("DONE");
-                    break;
-                case 'error':
-                    setTranslating(false);
-                    console.error(e.data.message);
-                    break;
-            }
-        };
-
-        worker.current.addEventListener('message', onMessageReceived);
-
-        return () => {
-            worker.current.removeEventListener('message', onMessageReceived);
-            worker.current.terminate(); 
-            worker.current = null;
-        };
-    }, []);
 
     const textElement = tab === 'transcription' ? output.map(val => val.text).join('\n') : translation || '';
 
@@ -64,18 +24,39 @@ export default function Information(props) {
         element.click();
     };
 
-    const generateTranslation = () => {
+    const generateTranslation = async () => {
         if (translating || toLanguage === 'Select language') {
             return;
         }
 
         setTranslating(true);
 
-        worker.current.postMessage({
-            text: output.map(val => val.text).join(' '), // Join for better handling
-            src_lang: 'eng_Latn', // Ensure this is the correct source language code
-            tgt_lang: toLanguage
-        });
+        try {
+            const response = await fetch('/.netlify/functions/translate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: output.map(val => val.text).join(' '), // Join for better handling
+                    src_lang: 'eng_Latn', // Ensure this is the correct source language code
+                    tgt_lang: toLanguage
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'complete') {
+                setTranslation(data.output);
+                console.log(`Translation completed in ${data.translationTime} seconds`);
+            } else {
+                console.error('Error in translation:', data.message);
+            }
+        } catch (error) {
+            console.error('Translation API Error:', error);
+        } finally {
+            setTranslating(false);
+        }
     };
 
     return (
