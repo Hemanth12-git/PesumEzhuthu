@@ -32,7 +32,7 @@ export default function Information(props) {
         setTranslating(true);
 
         try {
-            const response = await fetch('/.netlify/functions/translate', {
+            const response = await fetch('/netlify/functions/translate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
